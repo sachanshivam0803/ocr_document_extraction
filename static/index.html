@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xtract | OCR & Document Intelligence</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for Training Simulator -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/styles.css?v=5">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon"><i class="fa-solid fa-brain"></i></div>
+                <div class="logo-text">
+                    <h1>Xtract</h1>
+                    <p>OCR & Document Intelligence Platform</p>
+                </div>
+            </div>
+            
+            <div class="header-status">
+                <div class="status-badge" id="backend-status">
+                    <span class="indicator blink"></span>
+                    <span class="label">Connecting Backend...</span>
+                </div>
+                <div class="status-badge" id="gpu-status">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span class="label">GPU Check...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Workspace: Upload, Config, & Controls -->
+            <section class="control-panel glass-card">
+                <h2 class="section-title"><i class="fa-solid fa-sliders"></i> Document Input & Configuration</h2>
+                
+                <!-- File Upload Zone -->
+                <div class="upload-zone" id="drop-zone">
+                    <input type="file" id="file-input" accept="image/*" class="file-input-hidden">
+                    <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                    <h3>Drag & drop document image</h3>
+                    <p>Supports JPG, PNG (Max 10MB)</p>
+                    <span class="or-divider">OR</span>
+                    <button class="btn btn-primary" id="browse-btn"><i class="fa-solid fa-folder-open"></i> Browse Files</button>
+                </div>
+
+
+                <!-- Extraction Config -->
+                <div class="config-section">
+                    <span class="label-heading">Extraction Options:</span>
+                    
+                    <div class="toggle-group">
+                        <label class="toggle-control">
+                            <input type="checkbox" id="chk-layoutlm" checked>
+                            <span class="control-label">LayoutLM KIE Extraction</span>
+                        </label>
+                        <p class="toggle-desc">Extract semantic keys (Merchant, Total, Date) utilizing 2D spatial layouts</p>
+                    </div>
+
+                    <div class="toggle-group">
+                        <label class="toggle-control">
+                            <input type="checkbox" id="chk-trocr" checked>
+                            <span class="control-label">TrOCR Sub-word Recognition</span>
+                        </label>
+                        <p class="toggle-desc">Transcribe cropped bounding-box words using Sequence-to-Sequence Vision Transformers</p>
+                    </div>
+                    
+                    <div class="toggle-group">
+                        <label class="toggle-control">
+                            <input type="checkbox" id="chk-crnn">
+                            <span class="control-label">CRNN Pipeline Analysis</span>
+                        </label>
+                        <p class="toggle-desc">Compare line-level feature maps via CNN + BLSTM + CTC CTC Loss</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Middle Workspace: Interactive Document Viewer -->
+            <section class="document-viewer glass-card">
+                <h2 class="section-title"><i class="fa-solid fa-eye"></i> Document Sandbox</h2>
+                
+                <div class="canvas-wrapper">
+                    <div class="loading-overlay" id="loading-spinner" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Processing with LayoutLM & TrOCR...</p>
+                    </div>
+                    
+                    <div class="empty-state" id="canvas-empty">
+                        <i class="fa-solid fa-file-lines empty-icon"></i>
+                        <p>Upload a document to run the OCR extraction sandbox</p>
+                    </div>
+
+                    <div class="canvas-container" id="canvas-container" style="display: none;">
+                        <img id="doc-image" src="" alt="Document to analyze">
+                        <div class="bounding-box-overlay" id="box-overlay"></div>
+                    </div>
+                </div>
+                
+                <div class="canvas-legend">
+                    <span class="legend-item"><span class="legend-box merchant-box"></span> Merchant</span>
+                    <span class="legend-item"><span class="legend-box date-box"></span> Date/InvNo</span>
+                    <span class="legend-item"><span class="legend-box total-box"></span> Totals</span>
+                    <span class="legend-item"><span class="legend-box item-box"></span> Table Items</span>
+                </div>
+            </section>
+        </main>
+
+        <!-- Right Workspace: Extracted Structured Information (Shifted Below) -->
+        <section class="extraction-results glass-card" style="margin-top: 20px;">
+            <h2 class="section-title"><i class="fa-solid fa-table-list"></i> Information Extraction (KIE)</h2>
+            
+            <div class="results-container">
+                <div class="empty-state" id="results-empty">
+                    <p>Structured data will appear here after document analysis</p>
+                </div>
+
+                <div class="extracted-fields" id="extracted-fields" style="display: none;">
+                    
+                    <!-- Left Pane: Field Cards and Totals -->
+                    <div class="results-left-pane">
+                        <!-- Merchant Field Card -->
+                        <div class="field-card" data-field-id="field_merchant" id="card_merchant">
+                            <div class="field-header">
+                                <span class="field-label">Merchant Name</span>
+                                <div class="field-meta-tags">
+                                    <span class="model-badge badge-layoutlm" id="model_merchant">LayoutLM</span>
+                                    <span class="field-conf" id="conf_merchant">96%</span>
+                                </div>
+                            </div>
+                            <div class="field-value-container">
+                                <input type="text" class="field-value" id="val_merchant">
+                                <button class="field-map-btn" data-field-id="field_merchant" title="Map from Bounding Box">
+                                    <i class="fa-solid fa-crosshairs"></i>
+                                </button>
+                                <button class="field-copy-btn" data-input-id="val_merchant" title="Copy to Clipboard">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                            <div class="conf-progress-track">
+                                <div class="conf-progress-bar bar-merchant" id="bar_merchant" style="width: 96%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Date & Invoice Number Row -->
+                        <div class="field-row">
+                            <div class="field-card" data-field-id="field_date" id="card_date">
+                                <div class="field-header">
+                                    <span class="field-label">Invoice Date</span>
+                                    <div class="field-meta-tags">
+                                        <span class="model-badge badge-layoutlm" id="model_date">LayoutLM</span>
+                                        <span class="field-conf" id="conf_date">98%</span>
+                                    </div>
+                                </div>
+                                <div class="field-value-container">
+                                    <input type="text" class="field-value" id="val_date">
+                                    <button class="field-map-btn" data-field-id="field_date" title="Map from Bounding Box">
+                                        <i class="fa-solid fa-crosshairs"></i>
+                                    </button>
+                                    <button class="field-copy-btn" data-input-id="val_date" title="Copy to Clipboard">
+                                        <i class="fa-regular fa-copy"></i>
+                                    </button>
+                                </div>
+                                <div class="conf-progress-track">
+                                    <div class="conf-progress-bar bar-date" id="bar_date" style="width: 98%"></div>
+                                </div>
+                            </div>
+                            <div class="field-card" data-field-id="field_invoice_no" id="card_invoice_no">
+                                <div class="field-header">
+                                    <span class="field-label">Invoice / Reference No</span>
+                                    <div class="field-meta-tags">
+                                        <span class="model-badge badge-layoutlm" id="model_invoice_no">LayoutLM</span>
+                                        <span class="field-conf" id="conf_invoice_no">94%</span>
+                                    </div>
+                                </div>
+                                <div class="field-value-container">
+                                    <input type="text" class="field-value" id="val_invoice_no">
+                                    <button class="field-map-btn" data-field-id="field_invoice_no" title="Map from Bounding Box">
+                                        <i class="fa-solid fa-crosshairs"></i>
+                                    </button>
+                                    <button class="field-copy-btn" data-input-id="val_invoice_no" title="Copy to Clipboard">
+                                        <i class="fa-regular fa-copy"></i>
+                                    </button>
+                                </div>
+                                <div class="conf-progress-track">
+                                    <div class="conf-progress-bar bar-invoice_no" id="bar_invoice_no" style="width: 94%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Financials Row -->
+                        <div class="totals-section">
+                            <div class="subtotal-tax-block">
+                                <div class="totals-row" id="card_subtotal" data-field-id="field_subtotal">
+                                    <span>Subtotal</span>
+                                    <div class="totals-meta">
+                                        <span class="field-conf" id="conf_subtotal">95%</span>
+                                        <input type="text" class="totals-input" id="val_subtotal" value="$0.00">
+                                        <button class="field-map-btn small-map-btn" data-field-id="field_subtotal" title="Map from Bounding Box">
+                                            <i class="fa-solid fa-crosshairs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="totals-row" id="card_tax" data-field-id="field_tax">
+                                    <span>Tax (VAT)</span>
+                                    <div class="totals-meta">
+                                        <span class="field-conf" id="conf_tax">95%</span>
+                                        <input type="text" class="totals-input" id="val_tax" value="$0.00">
+                                        <button class="field-map-btn small-map-btn" data-field-id="field_tax" title="Map from Bounding Box">
+                                            <i class="fa-solid fa-crosshairs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="total-block" id="card_total" data-field-id="field_total">
+                                <div class="total-label-wrapper">
+                                    <span class="total-label">Total Amount</span>
+                                    <div class="total-meta-row">
+                                        <span class="field-conf font-small" id="conf_total">99%</span>
+                                        <button class="field-map-btn small-map-btn total-map-btn" data-field-id="field_total" title="Map from Bounding Box">
+                                            <i class="fa-solid fa-crosshairs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <input type="text" class="total-input-large" id="val_total" value="$0.00">
+                            </div>
+                            
+                            <!-- Arithmetic Validation Banner -->
+                            <div class="validation-banner" id="validation-banner" style="display: none;">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <span id="validation-msg">Validation Alert</span>
+                            </div>
+                        </div>
+                        
+                    </div>
+
+                    <!-- Right Pane: Line Items and Toolbar -->
+                    <div class="results-right-pane">
+                        <!-- Latency & Export Toolbar -->
+                        <div class="latency-badge-row">
+                            <div class="latency-badge">
+                                <i class="fa-solid fa-gauge-high"></i> Latency: <span id="latency-val">0.82s</span>
+                            </div>
+                            <button class="btn btn-secondary btn-small" id="export-json-btn" title="Export Extracted JSON">
+                                <i class="fa-solid fa-file-code"></i> Export JSON
+                            </button>
+                        </div>
+
+                        <!-- Table Line Items -->
+                        <div class="items-table-container">
+                            <span class="table-title">Line Items Table</span>
+                            <table class="items-table">
+                               <thead>
+                                   <tr>
+                                       <th style="width: 40px; text-align: center;">#</th>
+                                       <th>Item Description</th>
+                                       <th style="width: 60px; text-align: center;">Qty</th>
+                                       <th style="text-align: right; width: 100px;">Unit Price</th>
+                                       <th style="text-align: right; width: 100px;">Amount</th>
+                                   </tr>
+                               </thead>
+                               <tbody id="items-tbody">
+                                   <!-- Populated by JS -->
+                               </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Bottom Playground: Model Architectures & Training Simulator -->
+        <section class="bottom-sandbox glass-card">
+            <div class="sandbox-header">
+                <h2><i class="fa-solid fa-graduation-cap"></i> Model Benchmarking & Fine-Tuning Simulator</h2>
+                <div class="sandbox-tabs">
+                    <button class="tab-btn active" data-tab="tab-architectures">Architectures Comparison</button>
+                    <button class="tab-btn" data-tab="tab-training">Training Playground</button>
+                    <button class="tab-btn" data-tab="tab-history"><i class="fa-solid fa-clock-rotate-left"></i> Extraction History</button>
+                </div>
+            </div>
+
+            <!-- Tab Content 1: Architecture comparison sheets -->
+            <div class="tab-content active" id="tab-architectures">
+                <div class="architectures-grid">
+                    
+                    <!-- CRNN Card -->
+                    <div class="arch-card">
+                        <div class="arch-badge">Custom Architecture</div>
+                        <h3>CRNN (CNN + BLSTM + CTC)</h3>
+                        <p class="arch-desc">Combines Convolutional layers for visual feature map extraction and Recurrent layers for sequence modeling. Uses CTC loss to align unsegmented character predictions.</p>
+                        <div class="arch-metrics">
+                            <div class="metric">
+                                <span class="m-val">Fast (10ms)</span>
+                                <span class="m-lbl">Latency</span>
+                            </div>
+                            <div class="metric">
+                                <span class="m-val">Light (45MB)</span>
+                                <span class="m-lbl">Weight Size</span>
+                            </div>
+                            <div class="metric">
+                                <span class="m-val">86%</span>
+                                <span class="m-lbl">Accuracy</span>
+                            </div>
+                        </div>
+                        <div class="arch-tech-stack">
+                            <span class="tech-tag">PyTorch</span>
+                            <span class="tech-tag">CTC Loss</span>
+                            <span class="tech-tag">ResNet/VGG</span>
+                        </div>
+                    </div>
+
+                    <!-- TrOCR Card -->
+                    <div class="arch-card">
+                        <div class="arch-badge transformers">Hugging Face</div>
+                        <h3>TrOCR (ViT + GPT-2)</h3>
+                        <p class="arch-desc">End-to-end vision-language transformer. Leverages a pre-trained Vision Transformer (ViT) to encode cropped text crops, and a text GPT-2 model to decode character strings.</p>
+                        <div class="arch-metrics">
+                            <div class="metric">
+                                <span class="m-val">Medium (115ms)</span>
+                                <span class="m-lbl">Latency</span>
+                            </div>
+                            <div class="metric">
+                                <span class="m-val">Heavy (420MB)</span>
+                                <span class="m-lbl">Weight Size</span>
+                            </div>
+                            <div class="metric">
+                                <span class="m-val">94%</span>
+                                <span class="m-lbl">Accuracy</span>
+                            </div>
+                        </div>
+                        <div class="arch-tech-stack">
+                            <span class="tech-tag">Transformers</span>
+                            <span class="tech-tag">Seq2Seq</span>
+                            <span class="tech-tag">Attention</span>
+                        </div>
+                    </div>
+
+                    <!-- LayoutLM Card -->
+                    <div class="arch-card">
+                        <div class="arch-badge transformers">Multi-Modal</div>
+                        <h3>LayoutLM (v1/v2/v3)</h3>
+                        <p class="arch-desc">Models text positions, bounding box coordinates, and visual layouts simultaneously. Highly efficient at mapping spatial layout locations directly into semantic entity tags.</p>
+                        <div class="arch-metrics">
+                            <div class="metric">
+                                <span class="m-val">Robust (340ms)</span>
+                                <span class="m-lbl">Latency</span>
+                            </div>
+                            <div class="metric">
+                                <span class="m-val">Heavier (610MB)</span>
+                                <span class="m-lbl">Weight Size</span>
+                            </div>
+                            <div class="metric">
+                                <span class="m-val">91%</span>
+                                <span class="m-lbl">Accuracy</span>
+                            </div>
+                        </div>
+                        <div class="arch-tech-stack">
+                            <span class="tech-tag">LayoutLM</span>
+                            <span class="tech-tag">FUNSD/CORD</span>
+                            <span class="tech-tag">2D Pos Embeddings</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Tab Content 2: Training simulator controls & Live Charts -->
+            <div class="tab-content" id="tab-training">
+                <div class="training-playground-grid">
+                    
+                    <!-- Parameter Form -->
+                    <div class="train-config">
+                        <span class="label-heading">Training Hyperparameters</span>
+                        
+                        <div class="form-group">
+                            <label for="select-model">Target Architecture</label>
+                            <select id="select-model">
+                                <option value="layoutlm">LayoutLM (Token Classification KIE)</option>
+                                <option value="trocr">TrOCR (Encoder-Decoder Recognition)</option>
+                                <option value="crnn">CRNN (PyTorch CNN-LSTM-CTC)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="select-dataset">Training Dataset</label>
+                            <select id="select-dataset">
+                                <option value="funsd">FUNSD (Form Understanding - 199 forms)</option>
+                                <option value="cord">CORD (Receipt Extraction - 1000 receipts)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="train-epochs">Epochs</label>
+                                <input type="number" id="train-epochs" min="5" max="50" value="15">
+                            </div>
+                            <div class="form-group">
+                                <label for="train-lr">Learning Rate</label>
+                                <input type="number" id="train-lr" step="0.0001" min="0.00001" max="0.01" value="0.0005">
+                            </div>
+                            <div class="form-group">
+                                <label for="train-batch">Batch Size</label>
+                                <input type="number" id="train-batch" min="2" max="64" value="8">
+                            </div>
+                        </div>
+
+                        <button class="btn btn-success" id="start-train-btn">
+                            <i class="fa-solid fa-play"></i> Start Fine-Tuning
+                        </button>
+                    </div>
+
+                    <!-- Live Chart Plot -->
+                    <div class="train-chart-container">
+                        <span class="label-heading">Loss Curve & F1 Progression</span>
+                        <div class="chart-wrapper">
+                            <canvas id="trainChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Terminal Logs Screen -->
+                    <div class="train-terminal">
+                        <span class="label-heading">Training Execution Console Logs</span>
+                        <div class="terminal-body" id="terminal-logs">
+                            <div class="log-line text-system">System idle. Select parameters and launch fine-tuning...</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Tab Content 3: Extraction History Log -->
+            <div class="tab-content" id="tab-history">
+                <div class="history-container">
+                    <div class="history-header-row">
+                        <span class="label-heading" style="margin-bottom: 0;">Saved Extraction Logs</span>
+                        <button class="btn btn-secondary btn-small" id="clear-history-btn" style="width: auto; margin-bottom: 10px;">
+                            <i class="fa-solid fa-trash-can"></i> Clear History
+                        </button>
+                    </div>
+                    <div class="history-table-wrapper">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Filename</th>
+                                    <th>Doc Type</th>
+                                    <th>Merchant</th>
+                                    <th>Total</th>
+                                    <th>Latency</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-tbody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: var(--text-muted);">No saved logs. Upload documents to log extraction history.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <script src="/static/app.js?v=5"></script>
+</body>
+</html>
